@@ -3,6 +3,13 @@
 This isn't really in proper GNU ChangeLog format, it just happens to
 look that way.
 
+2014-04-18 Enrique Paredes <enrique@iknite.com>
+	* 0.4 release 
+	* python3 (3.3 & 3.4) support
+	* Test revamping to be compatible to the different python versions. 
+	  Instead of mocking sys.stdout, now shows the result directly. 
+	  It uses a single test.py file and no further dependencies.
+
 2007-12-22 John J Lee <jjl@pobox.com>
 	* 0.3 release
 	* Fix test timing output

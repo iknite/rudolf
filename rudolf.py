@@ -29,6 +29,7 @@ following copyright and licensing notice:
 #
 ##############################################################################
 """
+from __future__ import division, print_function
 
 import binascii
 import doctest
@@ -49,12 +50,12 @@ import nose.util
 # syntax-highlight traceback Python source lines
 
 
-__version__ = "0.3"
-__revision__ = "$Id: rudolf.py 49867 2007-12-17 13:55:54Z jjlee $"
+__version__ = "0.4"
 
 
 # some of this ANSI/xterm colour stuff is based on public domain code by Ian
 # Ward
+# don't use the basic 16 colours, we can't be sure what their RGB values are
 
 CUBE_START = 16  # first index of colour cube
 CUBE_SIZE = 6  # one side of the colour cube
@@ -64,32 +65,19 @@ CUBE_STEPS = 0x00, 0x5f, 0x87, 0xaf, 0xd7, 0xff
 GRAY_STEPS = (0x08, 0x12, 0x1c, 0x26, 0x30, 0x3a, 0x44, 0x4e, 0x58, 0x62,
               0x6c, 0x76, 0x80, 0x84, 0x94, 0x9e, 0xa8, 0xb2, 0xbc, 0xc6, 0xd0,
               0xda, 0xe4, 0xee)
-TABLE_START = CUBE_START  # don't use the basic 16 colours, since we can't be
-                          # sure what their RGB values are
+
+TABLE_START = CUBE_START
 TABLE_END = 256
 
 
 def xterm_from_rgb_string(rgb_text):
-    """
-    >>> xterm_from_rgb_string("000000")
-    16
-    >>> xterm_from_rgb_string("FF0000")
-    196
-
-    >>> xterm_from_rgb_string("0000")
-    Traceback (most recent call last):
-    ValueError: 0000
-    >>> xterm_from_rgb_string("blah")
-    Traceback (most recent call last):
-    ValueError: blah
-    """
     try:
         bytes = binascii.unhexlify(rgb_text)
-    except TypeError:
+    except (TypeError, binascii.Error):
         raise ValueError(rgb_text)
     if len(bytes) < 3:
         raise ValueError(rgb_text)
-    rgb = map(ord, bytes)
+    rgb = [x if isinstance(x, int) else ord(x) for x in bytes]
     return xterm_from_rgb(rgb)
 
 
@@ -98,9 +86,9 @@ def cube_vals(n):
     assert n >= CUBE_START and n < GRAY_START
     val = n - CUBE_START
     c = val % CUBE_SIZE
-    val = val / CUBE_SIZE
+    val = int(val / CUBE_SIZE)
     b = val % CUBE_SIZE
-    a = val / CUBE_SIZE
+    a = int(val / CUBE_SIZE)
     return a, b, c
 
 
@@ -109,9 +97,9 @@ def rgb_from_xterm(n):
     Components are between 0 and 255."""
     # we don't handle the basic 16 colours, since we can't be sure what their
     # RGB values are
-    assert n >= CUBE_START
+    assert n >= CUBE_START and n < TABLE_END
     if n < GRAY_START:
-        return [CUBE_STEPS[v] for v in cube_vals(n)]
+        return tuple([CUBE_STEPS[v] for v in cube_vals(n)])
     return (GRAY_STEPS[n - GRAY_START],) * 3
 
 
@@ -120,11 +108,11 @@ RGB_FROM_XTERM_COLOR = [
 
 
 def xterm_from_rgb(rgb):
-    smallest_distance = sys.maxint
+    smallest_distance = sys.maxsize
     for index in range(0, TABLE_END - TABLE_START):
         rc = RGB_FROM_XTERM_COLOR[index]
         dist = ((rc[0] - rgb[0]) ** 2 +
-                (rc[1] - rgb[1]) ** 2 + 
+                (rc[1] - rgb[1]) ** 2 +
                 (rc[2] - rgb[2]) ** 2)
         if dist < smallest_distance:
             smallest_distance = dist
@@ -137,9 +125,6 @@ class Xterm256Color(object):
     def __init__(self, xterm_color_code):
         self._code = xterm_color_code
 
-    def __str__(self):
-        return "%s(%s)" % (self.__class__.__name__, self._code)
-
     def terminal_code(self):
         return "\033[38;5;%dm" % self._code
 
@@ -149,10 +134,6 @@ class Ansi16Color(object):
     def __init__(self, foreground_color, bright):
         self._fg_color = foreground_color
         self._bright = bright
-
-    def __str__(self):
-        return "%s(%s, %s)" % (self.__class__.__name__,
-                               self._fg_color, self._bright)
 
     def terminal_code(self):
         if self._fg_color is None:
@@ -169,63 +150,7 @@ class Ansi16Color(object):
 
 
 def parse_color(color_text):
-    """
-    Names for the 16 ANSI colours
 
-    >>> print parse_color("black")
-    Ansi16Color(0, None)
-    >>> print parse_color("red")
-    Ansi16Color(1, None)
-    >>> print parse_color("darkred")
-    Ansi16Color(1, False)
-    >>> print parse_color("lightred")
-    Ansi16Color(1, True)
-    >>> print parse_color("brightred")
-    Ansi16Color(1, True)
-    >>> print parse_color("boldred")
-    Ansi16Color(1, True)
-
-    RGB colours
-
-    >>> print parse_color("rgb(ff0000)")
-    Xterm256Color(196)
-    >>> print parse_color("rgb(FF0000)")
-    Xterm256Color(196)
-
-    xterm colour codes
-
-    >>> print parse_color("0")
-    Xterm256Color(0)
-    >>> print parse_color("140")
-    Xterm256Color(140)
-
-    Bad colours
-
-    >>> parse_color("moored")
-    Traceback (most recent call last):
-    ValueError: Bad named colour: 'moored'
-    >>> parse_color("boldpink")
-    Traceback (most recent call last):
-    ValueError: Bad named colour: 'boldpink'
-    >>> parse_color("256")
-    Traceback (most recent call last):
-    ValueError: Bad xterm colour: '256'
-    >>> parse_color("-1")
-    Traceback (most recent call last):
-    ValueError: Bad xterm colour: '-1'
-    >>> parse_color("ff0000")
-    Traceback (most recent call last):
-    ValueError: Bad named colour: 'ff0000'
-    >>> parse_color("rgb(fg0000)")
-    Traceback (most recent call last):
-    ValueError: Bad RGB colour: 'rgb(fg0000)'
-    >>> parse_color("rgb(ff0000f)")
-    Traceback (most recent call last):
-    ValueError: Bad RGB colour: 'rgb(ff0000f)'
-    >>> parse_color("rgb(0000)")
-    Traceback (most recent call last):
-    ValueError: Bad RGB colour: 'rgb(0000)'
-    """
     assert color_text
 
     # RGB
@@ -277,24 +202,6 @@ def parse_color(color_text):
 
 
 def parse_colorscheme(colorscheme):
-    """
-    >>> colors = parse_colorscheme("fail=red,pass=rgb(00ff00),error=40")
-    >>> for name, color in sorted(colors.items()):
-    ...     print "%s: %s" % (name, color)
-    error: Xterm256Color(40)
-    fail: Ansi16Color(1, None)
-    pass: Xterm256Color(46)
-
-    >>> parse_colorscheme("fail:red,pass=green")
-    Traceback (most recent call last):
-    ValueError: Missing equals (name=colour): 'fail:red'
-    >>> parse_colorscheme("fail=spam")
-    Traceback (most recent call last):
-    ValueError: Bad named colour: 'spam'
-    >>> parse_colorscheme("fail=")
-    Traceback (most recent call last):
-    ValueError: Missing colour (name=colour): 'fail='
-    """
     if not colorscheme:
         return {}
 
@@ -318,25 +225,9 @@ def normalize_path(pathname):
 
 
 def relative_location(basedir, target, posix_result=True):
-    """
-    >>> relative_location("/a/b/", "/a/b/c")
-    'c'
-    >>> relative_location("a/b", "a/b/c/d")
-    'c/d'
-    >>> relative_location("/z", "/a/b")
-    '../a/b'
-
-    >>> this_dir = os.path.dirname(normalize_path(__file__))
-    >>> relative_location("/a/b/", "a/b/c") == "../.." + this_dir + "/a/b/c"
-    True
-
-    >>> nr_dirs_up_to_root = os.path.join(this_dir, "a", "b").count(os.sep)
-    >>> expected = "/".join([".."] * nr_dirs_up_to_root) + "/a/b/c/d"
-    >>> relative_location("a/b", "/a/b/c/d/") == expected
-    True
-    """
     # based on a function by Robin Becker
-    import os.path, posixpath
+    import os.path
+    import posixpath
     basedir = normalize_path(basedir)
     target = normalize_path(target)
     baseparts = basedir.split(os.sep)
@@ -347,7 +238,7 @@ def relative_location(basedir, target, posix_result=True):
     ii = 0
     while ii < nr_common and baseparts[ii] == targetparts[ii]:
         ii += 1
-    relative_parts = (nr_base-ii)*['..'] + targetparts[ii:]
+    relative_parts = (nr_base - ii) * ['..'] + targetparts[ii:]
     if posix_result:
         return posixpath.join(*relative_parts)
     else:
@@ -396,7 +287,7 @@ Got:
                   "?": "character-diffs",
                   "@": "diff-chunk",
                   "*": "diff-chunk",
-                  "!": "actual-output",}
+                  "!": "actual-output"}
 
     def __init__(self, verbosity, descriptions, colorscheme,
                  stream=sys.stdout, clean_tracebacks=False, base_dir=False):
@@ -408,8 +299,6 @@ Got:
         self._clean_tracebacks = clean_tracebacks
         self._base_dir = base_dir
         self._colorscheme = colorscheme
-#         for name, value in self._colorscheme.items():
-#             print >>sys.stderr, '%s = %s' % (name, value)
 
     def color(self, what):
         """Pick a named color from the color scheme"""
@@ -417,7 +306,7 @@ Got:
 
     def colorize(self, what, message, normal="normal"):
         """Wrap message in color."""
-        return self.color(what) + message + self.color(normal)
+        return u'' + self.color(what) + message + self.color(normal)
 
     def get_description(self, test):
         if self._descriptions:
@@ -475,9 +364,9 @@ Got:
                     skip_msg = " (%s)" % self.colorize("skip", reason)
             self._stream.writeln(self.separator1)
             self._stream.writeln("%s: %s%s" % (
-                    self.colorize(problem_color, flavour),
-                    self.colorize("testname", self.get_description(test)),
-                    skip_msg
+                self.colorize(problem_color, flavour),
+                self.colorize("testname", self.get_description(test)),
+                skip_msg
             ))
             if flavour != "SKIP":
                 self._stream.writeln(self.separator2)
@@ -493,10 +382,10 @@ Got:
 
         writeln(self.separator2)
         writelines([
-                "Ran ",
-                self.colorize(count_color, "%s " % tests_run),
-                "test%s in " % plural,
-                self._format_seconds(taken)])
+            "Ran ",
+            self.colorize(count_color, "%s " % tests_run),
+            "test%s in " % plural,
+            self._format_seconds(taken)])
         writeln()
         if not success:
             write(self.colorize("failure", "FAILED"))
@@ -520,11 +409,11 @@ Got:
         if n_seconds >= 60:
             n_minutes, n_seconds = divmod(n_seconds, 60)
             return "%s minutes %s seconds" % (
-                        self.colorize("number", "%d" % n_minutes, normal),
-                        self.colorize("number", "%.3f" % n_seconds, normal))
+                   self.colorize("number", "%d" % n_minutes, normal),
+                   self.colorize("number", "%.3f" % n_seconds, normal))
         else:
             return "%s seconds" % (
-                        self.colorize("number", "%.3f" % n_seconds, normal))
+                   self.colorize("number", "%.3f" % n_seconds, normal))
 
     def format_traceback(self, exc_info):
         """Format the traceback."""
@@ -532,12 +421,6 @@ Got:
         if isinstance(v, DocTestFailureException):
             tb = v.args[0]
         if isinstance(v, doctest.DocTestFailure):
-            # XXX
-#             if self._clean_tracebacks:
-#                 filename, lineno = elide_foreign_path_and_line_nr(
-#                     self._base_dir,
-#                     v.test.filename,
-#                     (v.test.lineno + v.example.lineno + 1))
             tb = self.doctest_template % (
                 v.test.filename,
                 v.test.lineno + v.example.lineno + 1,
@@ -545,7 +428,7 @@ Got:
                 v.example.source,
                 v.example.want,
                 v.got,
-                )
+            )
         else:
             tb = "".join(traceback.format_exception(*exc_info))
         return tb
@@ -556,7 +439,7 @@ Got:
             self.print_doctest_failure(formatted_traceback)
         else:
             self.print_colorized_traceback(formatted_traceback)
-            print >>self._stream
+            print(file=self._stream)
 
     def print_doctest_failure(self, formatted_failure):
         """Report a doctest failure.
@@ -579,8 +462,8 @@ Got:
                 break
             exc_lines.append(line)
         self.print_colorized_traceback("\n".join(exc_lines))
-        print >>self._stream
-        print >>self._stream, self.separator2
+        print(file=self._stream)
+        print(self.separator2, file=self._stream)
         exc_lines = []
 
         for line in lines:
@@ -600,17 +483,17 @@ Got:
                         self.color('testname'), test,
                         self.color('normal'), '\n'])
                 else:
-                    print >>self._stream, line
+                    print(line, file=self._stream)
             elif line.startswith('    '):
                 if colorize_diff and len(line) > 4:
                     color = self.diff_color.get(line[4],
                                                 color_of_indented_text)
-                    print >>self._stream, self.colorize(color, line)
+                    print(self.colorize(color, line), file=self._stream)
                 elif colorize_exception:
                     exc_lines.append(line[4:])
                 else:
-                    print >>self._stream, self.colorize(color_of_indented_text,
-                                                        line)
+                    print(self.colorize(color_of_indented_text,
+                                        line), file=self._stream)
             else:
                 colorize_diff = False
                 if colorize_exception:
@@ -631,19 +514,19 @@ Got:
                     if line in [
                         "Differences (ndiff with -expected +actual):",
                         "Differences (unified diff with -expected +actual):"
-                        ]:
+                    ]:
                         line = "".join([
-                                "Differences (ndiff with ",
-                                self.color("expected-output"), "-expected ",
-                                self.color("actual-output"), "+actual",
-                                self.color("normal"), "):",
-                                ])
+                            "Differences (ndiff with ",
+                            self.color("expected-output"), "-expected ",
+                            self.color("actual-output"), "+actual",
+                            self.color("normal"), "):",
+                        ])
                     color_of_indented_text = 'normal'
                     colorize_diff = True
                 else:
                     color_of_indented_text = 'normal'
-                print >>self._stream, line
-        print >>self._stream
+                print(line, file=self._stream)
+        print(file=self._stream)
 
     def print_colorized_traceback(self, formatted_traceback, indent_level=0):
         """Report a test failure.
@@ -664,33 +547,33 @@ Got:
                         self.color("filename"), filename,
                         self.color("normal"), '", line ',
                         self.color("lineno"), lineno,
-                        ]
+                    ]
                     if test:
                         # this is missing for the first traceback in doctest
                         # failure report
                         tb_lines.extend([
-                                self.color("normal"), ", in ",
-                                self.color("testname"), test,
-                                ])
+                            self.color("normal"), ", in ",
+                            self.color("testname"), test,
+                        ])
                     tb_lines.extend([
-                            self.color("normal"), "\n",
-                                    ])
+                        self.color("normal"), "\n",
+                    ])
                     self._stream.write(indentation)
                     self._stream.writelines(tb_lines)
                 else:
-                    print >>self._stream, indentation + line
+                    print(indentation + line, file=self._stream)
             elif line.startswith("    "):
-                print >>self._stream, self.colorize("failed-example",
-                                                    indentation + line)
+                print(self.colorize("failed-example",
+                                    indentation + line), file=self._stream)
             elif line.startswith("Traceback (most recent call last)"):
-                print >>self._stream, indentation + line
+                print(indentation + line, file=self._stream)
             else:
-                print >>self._stream, self.colorize("exception",
-                                                    indentation + line)
+                print(self.colorize("exception",
+                                    indentation + line), file=self._stream)
 
     def stop_test(self, test):
         if self._verbose > 1:
-            print >>self._stream
+            print(file=self._stream)
         self._stream.flush()
 
     def stop_tests(self):
@@ -729,13 +612,14 @@ class ColorOutputPlugin(nose.plugins.Plugin):
                            "exception": "red",
                            "skip": "yellow"}
     default_colorscheme = dict((name, parse_color(color)) for name, color in
-                               default_colorscheme.iteritems())
+                               default_colorscheme.items())
 
-    score = 50  # Lower than default plugin level, since the output we're
-                # printing is replacing non-plugin core nose output, which
-                # usually happens after plugin output.  If this were >= default
-                # score, then e.g. core plugin testid output would come out in
-                # the wrong place.
+    # Lower than default plugin level, since the output we're
+    # printing is replacing non-plugin core nose output, which
+    # usually happens after plugin output.  If this were >= default
+    # score, then e.g. core plugin testid output would come out in
+    # the wrong place.
+    score = 50
 
     def __init__(self):
         nose.plugins.Plugin.__init__(self)
@@ -784,7 +668,7 @@ class ColorOutputPlugin(nose.plugins.Plugin):
         cs = dict(self.default_colorscheme)
         try:
             user_colorscheme = parse_colorscheme(options.colors)
-        except ValueError, exc:
+        except ValueError as exc:
             filenames = list(conf.files)
             if options.files:
                 filenames.extend(options.files)
@@ -834,6 +718,7 @@ class ColorOutputPlugin(nose.plugins.Plugin):
         # code called on skips (our own addSkip, if defined, is ignored.)
         # Gross, but works.
         old_addSkip = result.addSkip
+
         def new_addSkip(test, reason):
             old_addSkip(test, reason)
             label = result.errorClasses[nose.plugins.skip.SkipTest][1]
@@ -894,7 +779,7 @@ class ColorOutputPlugin(nose.plugins.Plugin):
         summary = nose.util.odict()
         if not success:
             summary["failures"], summary["errors"] = \
-                map(len, [self._result.__failures, self._result.__errors])
+                [len(x) for x in (self._result.__failures, self._result.__errors)]
             for cls in self._result.errorClasses.keys():
                 storage, label, isfail = self._result.errorClasses[cls]
                 if not isfail:
@@ -916,34 +801,14 @@ class ColorOutputPlugin(nose.plugins.Plugin):
         return ''.join(traceback.format_exception(exctype, value, tb))
 
     def _is_relevant_tb_level(self, tb):
-        return tb.tb_frame.f_globals.has_key('__unittest')
+        return '__unittest' in tb.tb_frame.f_globals
 
     def _count_relevant_tb_levels(self, tb):
         length = 0
         while tb and not self._is_relevant_tb_level(tb):
             length += 1
             tb = tb.tb_next
+        # printing is replacing non-plugin core nose output, which
+        # usually happens after plugin output.  If this were >= default
+        # score, then e.g. core plugin testid output would come out in
         return length
-
-
-# classes for use in rudolf's own tests
-
-
-class TestColorfulOutputFormatter(ColorfulOutputFormatter):
-
-    __test__ = False
-
-    def _format_seconds(self, n_seconds, normal="normal"):
-        return "%s seconds" % (self.colorize("number", "...", normal))
-
-
-class TestColorOutputPlugin(ColorOutputPlugin):
-
-    __test__ = False
-
-    formatter_class = TestColorfulOutputFormatter
-    clean_tracebacks = True
-
-    def __init__(self):
-        ColorOutputPlugin.__init__(self)
-        self.base_dir = os.path.dirname(__file__)

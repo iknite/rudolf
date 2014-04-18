@@ -4,20 +4,22 @@ from setuptools import setup
 
 setup(
     name="rudolf",
-    version="0.3",
-    download_url = "http://pypi.python.org/pypi/rudolf/",
+    version="0.4",
+    download_url="http://pypi.python.org/pypi/rudolf/",
 
-    description = "Colour output plugin for the nose testing framework",
-    author = "John J. Lee",
-    author_email = "jjl@pobox.com",
-    license = "ZPL 2.1",
-    platforms = ["POSIX"],
+    description="Colour output plugin for the nose testing framework",
+    author="John J. Lee",
+    author_email="jjl@pobox.com",
+    license="ZPL 2.1",
+    platforms=["POSIX"],
 
-    install_requires = ["nose>=0.1.0, ==dev"],
+    install_requires=["nose>=0.1.0, ==dev"],
+    test_suite='nose.collector',
+    test_requires=['tox', 'nose', 'coverage', 'flake8'],
 
-    url = "http://pypi.python.org/pypi/rudolf/",
+    url="http://pypi.python.org/pypi/rudolf/",
 
-    long_description = """Colour output plugin for the nose testing framework.
+    long_description="""Colour output plugin for the nose testing framework.
 
 Only works on Unix-like systems (uses ANSI colour codes).
 
@@ -31,9 +33,17 @@ gives off its own light that is powerful enough to illuminate the team's path
 through inclement weather.
 """,
 
-    py_modules = ["rudolf"],
-    entry_points = {
-        "nose.plugins.0.10": ["color = rudolf:ColorOutputPlugin"]
-        },
-    zip_safe = True,
+    py_modules=["rudolf"],
+    entry_points={
+        "nose.plugins.0.10": ["color=rudolf:ColorOutputPlugin"]
+    },
+    zip_safe=True,
+    classifiers=[
+        "Programming Language :: Python :: 2",
+        'Programming Language :: Python :: 2.6',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4'
+    ],
 )

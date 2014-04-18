@@ -1,0 +1,14 @@
+*~
+*.pyc
+*.pyo
+*.pyt
+*.pytc
+*.egg
+*.egg*
+.DS_Store
+__pycache__
+.coverage
+.noseids
+*.swp
+.tox/
+htmlcov/
